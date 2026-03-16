@@ -156,6 +156,13 @@
     }
     #detail-btn:hover{border-color:#888;color:#bbb}
     #err{margin-top:.75rem;font-size:12px;color:#c0392b}
+    .kw{
+    color:#7ec8e3;
+    border-bottom:1px solid #7ec8e344;
+    cursor:pointer;
+    transition:color .15s,border-color .15s
+    }
+    .kw:hover{color:#aee0f5;border-bottom-color:#aee0f5}
   </style>
 </head>
 
@@ -241,7 +248,14 @@
     document.getElementById('a-ph').style.display = 'none'
     const el = document.getElementById('a-txt')
     el.style.display = 'block'
-    el.textContent = txt
+    el.innerHTML = txt.replace(/\[\[(.+?)\]\]/g, (_, word) => {
+      const url = 'https://uk.wikipedia.org/wiki/' + encodeURIComponent(word)
+      return '<span class="kw" data-url="' + url + '">' + word + '</span>'
+    })
+    // вішаємо кліки через делегування — без inline onclick
+    el.querySelectorAll('.kw').forEach(span => {
+      span.addEventListener('click', () => window.open(span.dataset.url, '_blank'))
+    })
     document.getElementById('detail-btn').style.display = 'block'
   }
 
@@ -258,7 +272,7 @@
           model: 'llama-3.3-70b-versatile',
           max_tokens: 800,
           messages: [
-            { role: 'system', content: "Ти експерт з фармацевтичної хімії. Дай розгорнуту відповідь українською — 5-7 речень. Без зайвих вступів, одразу суть." },
+            { role: 'system', content: "Ти експерт з фармацевтичної хімії. Дай розгорнуту відповідь українською — 5-7 речень. Без зайвих вступів, одразу суть. Ключові терміни (назви речовин, процесів, понять) обгортай у [[подвійні дужки]], наприклад: [[парацетамол]], [[ЦОГ-2]]." },
             { role: 'user', content: lastQuestion }
           ]
         })
@@ -287,7 +301,7 @@
           messages: [
             {
               role: 'system',
-              content: "Ти експерт з фармацевтичної хімії. Відповідай строго 2-3 речення українською. Без вступних слів типу Звичайно або Чудове питання. Одразу суть — коротко, точно, зрозуміло для аудиторії."
+              content: "Ти експерт з фармацевтичної хімії. Відповідай строго 2-3 речення українською. Без вступних слів. Одразу суть — коротко, точно. Ключові терміни (назви речовин, процесів, понять) обгортай у [[подвійні дужки]], наприклад: [[парацетамол]], [[ЦОГ-2]]."
             },
             { role: 'user', content: question }
           ]

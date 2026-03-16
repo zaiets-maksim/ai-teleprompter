@@ -367,9 +367,10 @@
 
     rec.onresult = e => {
       if (!micEnabled) return
-      const t = e.results[e.results.length - 1][0].transcript.trim()
+      const raw = e.results[e.results.length - 1][0].transcript
+      // залишаємо тільки українські/латинські літери, цифри і пунктуацію
+      const t = raw.replace(/[^Ѐ-ӿa-zA-Z0-9\s.,;:!?()\-'"]/g, '').trim()
       if (t) {
-        // накопичуємо текст, не відправляємо — чекаємо поки мікрофон вимкнуть
         lastQuestion = lastQuestion ? lastQuestion + ' ' + t : t
         document.getElementById('q-txt').textContent = lastQuestion
       }

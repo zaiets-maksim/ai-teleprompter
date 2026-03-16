@@ -201,6 +201,9 @@
 
     try {
       micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      // закриваємо стрім — він потрібен лише щоб отримати дозвіл
+      // на Android він конфліктує з Web Speech API якщо залишити відкритим
+      micStream.getTracks().forEach(t => t.stop())
       startListening()
     } catch (e) {
       setStatus('', 'немає доступу до мікрофона')
@@ -290,22 +293,25 @@
 
     rec = new SR()
     rec.lang = 'uk-UA'
-    rec.interimResults = true
-    rec.continuous = true
+    rec.interimResults = false
+    rec.continuous = false   // continuous:true ламається на Android Chrome
+
+    let restarting = false
+
+    function scheduleRestart(delay) {
+      if (restarting || !apiKey || !micEnabled) return
+      restarting = true
+      setTimeout(() => { restarting = false; startListening() }, delay || 400)
+    }
 
     rec.onstart = () => setStatus('listening', 'слухаю...')
 
     rec.onresult = e => {
       if (!micEnabled) return
-
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) {
-          const t = e.results[i][0].transcript.trim()
-          if (!waiting) {
-            document.getElementById('q-txt').textContent = t
-            askGroq(t)
-          }
-        }
+      const t = e.results[e.results.length - 1][0].transcript.trim()
+      if (t && !waiting) {
+        document.getElementById('q-txt').textContent = t
+        askGroq(t)
       }
     }
 
@@ -315,17 +321,12 @@
         showErr('дозволь доступ до мікрофона в налаштуваннях браузера')
         return
       }
-      if (e.error === 'network' || e.error === 'no-speech') {
-        setTimeout(() => startListening(), 600)
-        return
-      }
-      showErr(e.error)
+      // network/no-speech — тихий рестарт, onend може не спрацювати
+      scheduleRestart(600)
     }
 
     rec.onend = () => {
-      if (apiKey && micEnabled) {
-        setTimeout(() => startListening(), 300)
-      }
+      scheduleRestart(400)
     }
 
     rec.start()

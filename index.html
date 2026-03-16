@@ -313,11 +313,15 @@
     if (micEnabled) {
       btn.textContent = '🎤 ON'
       btn.className = 'on'
-      setStatus('listening', 'слухаю...')
+      lastQuestion = ''
+      document.getElementById('q-txt').textContent = '—'
+      startListening()
     } else {
       btn.textContent = '🎤 OFF'
       btn.className = 'off'
-      setStatus('', 'мікрофон вимкнений')
+      setStatus('', 'обробляю...')
+      if (rec) { rec.onend = null; try { rec.abort() } catch {} rec = null }
+      if (lastQuestion && !waiting) askGroq(lastQuestion)
     }
   }
 
@@ -350,10 +354,10 @@
     rec.onresult = e => {
       if (!micEnabled) return
       const t = e.results[e.results.length - 1][0].transcript.trim()
-      if (t && !waiting) {
-        document.getElementById('q-txt').textContent = t
-        lastQuestion = t
-        askGroq(t)
+      if (t) {
+        // накопичуємо текст, не відправляємо — чекаємо поки мікрофон вимкнуть
+        lastQuestion = lastQuestion ? lastQuestion + ' ' + t : t
+        document.getElementById('q-txt').textContent = lastQuestion
       }
     }
 

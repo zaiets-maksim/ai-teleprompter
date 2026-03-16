@@ -79,6 +79,8 @@
     text-transform:uppercase
     }
     
+    /* НОВА КНОПКА */
+    
     #mic-btn{
     margin-left:auto;
     background:#2979ff;
@@ -163,167 +165,151 @@
   <div id="a-txt"></div>
 </div>
 
-<div id="note">відповіді та не-питання ігноруються</div>
+<div id="note">made by miraldi</div>
 <div id="err"></div>
 
 <script>
-  let apiKey = localStorage.getItem('groq_key') || ''
-  let rec = null
-  let waiting = false
-  let micEnabled = true
-  let micStream = null  // зберігаємо стрім щоб не запитувати повторно
+
+  let apiKey=localStorage.getItem('groq_key')||''
+  let rec=null
+  let waiting=false
+  let micEnabled=true
   
-  if (apiKey) {
-    document.getElementById('key-input').value = apiKey
-    requestMicAndStart()
+  if(apiKey){
+  document.getElementById('key-input').value=apiKey
+  startListening()
   }
   
-  function saveKey() {
-    apiKey = document.getElementById('key-input').value.trim()
-    localStorage.setItem('groq_key', apiKey)
-    requestMicAndStart()
+  function saveKey(){
+  apiKey=document.getElementById('key-input').value.trim()
+  localStorage.setItem('groq_key',apiKey)
+  startListening()
   }
   
-  // Запитуємо дозвіл ОДИН РАЗ, потім запускаємо розпізнавання
-  async function requestMicAndStart() {
-    if (!apiKey) return
-  
-    if (micStream) {
-      // дозвіл вже є — просто запускаємо
-      startListening()
-      return
-    }
-  
-    try {
-      micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      startListening()
-    } catch (e) {
-      setStatus('', 'немає доступу до мікрофона')
-      showErr('дозволь доступ до мікрофона в браузері')
-    }
+  function setStatus(cls,txt){
+  document.getElementById('dot').className=cls
+  document.getElementById('st').textContent=txt
   }
   
-  function setStatus(cls, txt) {
-    document.getElementById('dot').className = cls
-    document.getElementById('st').textContent = txt
+  function showErr(msg){
+  const el=document.getElementById('err')
+  el.textContent=msg
+  setTimeout(()=>el.textContent='',4000)
   }
   
-  function showErr(msg) {
-    const el = document.getElementById('err')
-    el.textContent = msg
-    setTimeout(() => el.textContent = '', 4000)
+  function showAnswer(txt){
+  document.getElementById('a-ph').style.display='none'
+  const el=document.getElementById('a-txt')
+  el.style.display='block'
+  el.textContent=txt
   }
   
-  function showAnswer(txt) {
-    document.getElementById('a-ph').style.display = 'none'
-    const el = document.getElementById('a-txt')
-    el.style.display = 'block'
-    el.textContent = txt
+  async function askGroq(question){
+  
+  waiting=true
+  setStatus('thinking','думаю...')
+  
+  try{
+  
+  const r=await fetch('https://api.groq.com/openai/v1/chat/completions',{
+  method:'POST',
+  headers:{
+  'Content-Type':'application/json',
+  'Authorization':'Bearer '+apiKey
+  },
+  body:JSON.stringify({
+  model:'llama-3.3-70b-versatile',
+  max_tokens:300,
+  messages:[
+  {
+  role:'system',
+  content:'Ти експерт з фармацевтичної хімії. Відповідай коротко 2-3 речення українською.'
+  },
+  {role:'user',content:question}
+  ]
+  })
+  })
+  
+  const data=await r.json()
+  const ans=data.choices?.[0]?.message?.content||'...'
+  showAnswer(ans)
+  
+  }catch(e){
+  showErr('помилка підключення')
   }
   
-  async function askGroq(question) {
-    waiting = true
-    setStatus('thinking', 'думаю...')
-  
-    try {
-      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + apiKey
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          max_tokens: 300,
-          messages: [
-            {
-              role: 'system',
-              content: 'Ти експерт з фармацевтичної хімії. Відповідай коротко 2-3 речення українською.'
-            },
-            { role: 'user', content: question }
-          ]
-        })
-      })
-  
-      const data = await r.json()
-      const ans = data.choices?.[0]?.message?.content || '...'
-      showAnswer(ans)
-  
-    } catch (e) {
-      showErr('помилка підключення')
-    }
-  
-    waiting = false
-    setStatus('listening', 'слухаю...')
+  waiting=false
+  setStatus('listening','слухаю...')
   }
   
-  function toggleMic() {
-    micEnabled = !micEnabled
-    const btn = document.getElementById('mic-btn')
+  function toggleMic(){
   
-    if (micEnabled) {
-      btn.textContent = '🎤 вимкнути'
-      setStatus('listening', 'слухаю...')
-    } else {
-      btn.textContent = '🎤 увімкнути'
-      setStatus('', 'мікрофон вимкнений')
-    }
+  micEnabled=!micEnabled
+  
+  const btn=document.getElementById('mic-btn')
+  
+  if(micEnabled){
+  btn.textContent='🎤 вимкнути'
+  setStatus('listening','слухаю...')
+  }else{
+  btn.textContent='🎤 увімкнути'
+  setStatus('', 'мікрофон вимкнений')
   }
   
-  function startListening() {
-    if (!apiKey) return
-  
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) { setStatus('', 'потрібен Chrome'); return }
-  
-    // зупиняємо попередній екземпляр якщо є
-    if (rec) {
-      try { rec.stop() } catch {}
-      rec = null
-    }
-  
-    rec = new SR()
-    rec.lang = 'uk-UA'
-    rec.interimResults = true
-    rec.continuous = true
-  
-    rec.onstart = () => setStatus('listening', 'слухаю...')
-  
-    rec.onresult = e => {
-      if (!micEnabled) return
-  
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) {
-          const t = e.results[i][0].transcript.trim()
-          if (!waiting) {
-            document.getElementById('q-txt').textContent = t
-            askGroq(t)
-          }
-        }
-      }
-    }
-  
-    rec.onerror = e => {
-      // not-allowed = браузер заблокував — не рестартуємо
-      if (e.error === 'not-allowed') {
-        setStatus('', 'доступ заблоковано')
-        showErr('дозволь доступ до мікрофона в налаштуваннях браузера')
-        return
-      }
-      if (e.error !== 'no-speech') showErr(e.error)
-    }
-  
-    rec.onend = () => {
-      // перезапускаємо БЕЗ нового getUserMedia — дозвіл вже є
-      if (apiKey && micEnabled) {
-        setTimeout(() => {
-          try { rec.start() } catch {}
-        }, 300)
-      }
-    }
-  
-    rec.start()
   }
+  
+  function startListening(){
+  
+  if(!apiKey)return
+  
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition
+  if(!SR){setStatus('', 'потрібен Chrome');return}
+  
+  rec=new SR()
+  
+  rec.lang='uk-UA'
+  rec.interimResults=true
+  rec.continuous=true
+  
+  rec.onstart=()=>setStatus('listening','слухаю...')
+  
+  rec.onresult=e=>{
+  
+  if(!micEnabled)return
+  
+  for(let i=e.resultIndex;i<e.results.length;i++){
+  
+  if(e.results[i].isFinal){
+  
+  const t=e.results[i][0].transcript.trim()
+  
+  if(!waiting){
+  document.getElementById('q-txt').textContent=t
+  askGroq(t)
+  }
+  
+  }
+  
+  }
+  
+  }
+  
+  rec.onerror=e=>{
+  if(e.error!=='no-speech')showErr(e.error)
+  }
+  
+  rec.onend=()=>{
+  if(apiKey){
+  setTimeout(()=>{
+  try{rec.start()}catch{}
+  },300)
+  }
+  }
+  
+  rec.start()
+  
+  }
+
 </script>
 
 </body>

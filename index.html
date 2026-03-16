@@ -315,7 +315,11 @@
         showErr('дозволь доступ до мікрофона в налаштуваннях браузера')
         return
       }
-      if (e.error !== 'no-speech') showErr(e.error)
+      if (e.error === 'network' || e.error === 'no-speech') {
+        setTimeout(() => startListening(), 600)
+        return
+      }
+      showErr(e.error)
     }
 
     rec.onend = () => {

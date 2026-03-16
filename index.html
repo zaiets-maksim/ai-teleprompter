@@ -81,22 +81,29 @@
     
     #mic-btn{
     margin-left:auto;
-    background:#2979ff;
     border:none;
     color:white;
-    padding:10px 18px;
+    padding:10px 22px;
     border-radius:8px;
     cursor:pointer;
     font-size:14px;
-    font-weight:600;
-    box-shadow:0 4px 14px rgba(41,121,255,.4);
-    transition:.15s;
+    font-weight:700;
+    letter-spacing:.05em;
+    transition:background .2s, box-shadow .2s, transform .15s;
     }
     
-    #mic-btn:hover{
-    background:#3d8bff;
-    transform:scale(1.05);
+    #mic-btn.on{
+    background:#e53935;
+    box-shadow:0 4px 14px rgba(229,57,53,.5);
     }
+    
+    #mic-btn.off{
+    background:#3a3a3a;
+    box-shadow:none;
+    color:#888;
+    }
+    
+    #mic-btn:hover{transform:scale(1.05)}
     
     #q-wrap{
     width:100%;max-width:860px;
@@ -150,7 +157,7 @@
 <div id="top">
   <div id="dot"></div>
   <span id="st">введи ключ і збережи</span>
-  <button id="mic-btn" onclick="toggleMic()">🎤 вимкнути</button>
+  <button id="mic-btn" class="on" onclick="toggleMic()">🎤 ON</button>
 </div>
 
 <div id="q-wrap">
@@ -171,29 +178,27 @@
   let rec = null
   let waiting = false
   let micEnabled = true
-  let micStream = null  // зберігаємо стрім щоб не запитувати повторно
-  
+  let micStream = null
+
   if (apiKey) {
     document.getElementById('key-input').value = apiKey
     requestMicAndStart()
   }
-  
+
   function saveKey() {
     apiKey = document.getElementById('key-input').value.trim()
     localStorage.setItem('groq_key', apiKey)
     requestMicAndStart()
   }
-  
-  // Запитуємо дозвіл ОДИН РАЗ, потім запускаємо розпізнавання
+
   async function requestMicAndStart() {
     if (!apiKey) return
-  
+
     if (micStream) {
-      // дозвіл вже є — просто запускаємо
       startListening()
       return
     }
-  
+
     try {
       micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
       startListening()
@@ -202,29 +207,29 @@
       showErr('дозволь доступ до мікрофона в браузері')
     }
   }
-  
+
   function setStatus(cls, txt) {
     document.getElementById('dot').className = cls
     document.getElementById('st').textContent = txt
   }
-  
+
   function showErr(msg) {
     const el = document.getElementById('err')
     el.textContent = msg
     setTimeout(() => el.textContent = '', 4000)
   }
-  
+
   function showAnswer(txt) {
     document.getElementById('a-ph').style.display = 'none'
     const el = document.getElementById('a-txt')
     el.style.display = 'block'
     el.textContent = txt
   }
-  
+
   async function askGroq(question) {
     waiting = true
     setStatus('thinking', 'думаю...')
-  
+
     try {
       const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
@@ -244,54 +249,55 @@
           ]
         })
       })
-  
+
       const data = await r.json()
       const ans = data.choices?.[0]?.message?.content || '...'
       showAnswer(ans)
-  
+
     } catch (e) {
       showErr('помилка підключення')
     }
-  
+
     waiting = false
     setStatus('listening', 'слухаю...')
   }
-  
+
   function toggleMic() {
     micEnabled = !micEnabled
     const btn = document.getElementById('mic-btn')
-  
+
     if (micEnabled) {
-      btn.textContent = '🎤 вимкнути'
+      btn.textContent = '🎤 ON'
+      btn.className = 'on'
       setStatus('listening', 'слухаю...')
     } else {
-      btn.textContent = '🎤 увімкнути'
+      btn.textContent = '🎤 OFF'
+      btn.className = 'off'
       setStatus('', 'мікрофон вимкнений')
     }
   }
-  
+
   function startListening() {
     if (!apiKey) return
-  
+
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SR) { setStatus('', 'потрібен Chrome'); return }
-  
-    // зупиняємо попередній екземпляр якщо є
+
     if (rec) {
       try { rec.stop() } catch {}
       rec = null
     }
-  
+
     rec = new SR()
     rec.lang = 'uk-UA'
     rec.interimResults = true
     rec.continuous = true
-  
+
     rec.onstart = () => setStatus('listening', 'слухаю...')
-  
+
     rec.onresult = e => {
       if (!micEnabled) return
-  
+
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (e.results[i].isFinal) {
           const t = e.results[i][0].transcript.trim()
@@ -302,9 +308,8 @@
         }
       }
     }
-  
+
     rec.onerror = e => {
-      // not-allowed = браузер заблокував — не рестартуємо
       if (e.error === 'not-allowed') {
         setStatus('', 'доступ заблоковано')
         showErr('дозволь доступ до мікрофона в налаштуваннях браузера')
@@ -312,16 +317,13 @@
       }
       if (e.error !== 'no-speech') showErr(e.error)
     }
-  
+
     rec.onend = () => {
-      // перезапускаємо БЕЗ нового getUserMedia — дозвіл вже є
       if (apiKey && micEnabled) {
-        setTimeout(() => {
-          try { rec.start() } catch {}
-        }, 300)
+        setTimeout(() => startListening(), 300)
       }
     }
-  
+
     rec.start()
   }
 </script>

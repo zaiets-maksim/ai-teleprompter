@@ -249,7 +249,7 @@
     const el = document.getElementById('a-txt')
     el.style.display = 'block'
     el.innerHTML = txt.replace(/\[\[(.+?)\]\]/g, (_, word) => {
-      const url = 'https://uk.wikipedia.org/wiki/' + encodeURIComponent(word)
+      const url = 'https://uk.wikipedia.org/w/index.php?search=' + encodeURIComponent(word)
       return '<span class="kw" data-url="' + url + '">' + word + '</span>'
     })
     // вішаємо кліки через делегування — без inline onclick
@@ -281,7 +281,8 @@
       showAnswer(data.choices?.[0]?.message?.content || '...')
     } catch(e) { showErr('помилка підключення') }
     waiting = false
-    setStatus('listening', 'слухаю...')
+    if (micEnabled) setStatus('listening', 'слухаю...')
+    else setStatus('', 'мікрофон вимкнений')
   }
 
   async function askGroq(question) {
@@ -317,7 +318,8 @@
     }
 
     waiting = false
-    setStatus('listening', 'слухаю...')
+    if (micEnabled) setStatus('listening', 'слухаю...')
+    else setStatus('', 'мікрофон вимкнений')
   }
 
   function toggleMic() {

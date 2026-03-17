@@ -12,15 +12,55 @@
     min-height:100vh;
     background:#1e1e1e;
     display:flex;
+    flex-direction:row;
+    font-family:'Segoe UI',system-ui,sans-serif
+    }
+
+    #sidebar{
+    width:260px;
+    min-width:260px;
+    background:#181818;
+    border-right:.5px solid #2a2a2a;
+    display:flex;
+    flex-direction:column;
+    padding:1.25rem 1rem;
+    gap:10px;
+    min-height:100vh;
+    overflow-y:auto
+    }
+
+    #sidebar-label{
+    font-size:10px;color:#444;text-transform:uppercase;
+    letter-spacing:.08em;padding:0 4px;margin-bottom:4px
+    }
+
+    .h-item{
+    background:#222;
+    border:.5px solid #2e2e2e;
+    border-radius:10px;
+    padding:10px 12px;
+    cursor:pointer;
+    transition:border-color .15s,background .15s
+    }
+    .h-item:hover{background:#2a2a2a;border-color:#3a3a3a}
+    .h-item.active{border-color:#7ec8e3;background:#1a2d33}
+    .h-q{font-size:12px;color:#888;margin-bottom:5px;line-height:1.4}
+    .h-q span{font-size:10px;color:#444;margin-right:5px}
+    .h-a{font-size:11px;color:#444;line-height:1.4;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .h-item.active .h-a{color:#666}
+
+    #main{
+    flex:1;
+    display:flex;
     flex-direction:column;
     align-items:center;
     justify-content:center;
-    padding:2rem;
-    font-family:'Segoe UI',system-ui,sans-serif
+    padding:2rem
     }
     
     #key-wrap{
-    width:100%;max-width:860px;
+    width:100%;max-width:900px;
     background:#282828;
     border:.5px solid #383838;
     border-radius:8px;
@@ -48,7 +88,7 @@
     gap:10px;
     margin-bottom:2rem;
     width:100%;
-    max-width:860px
+    max-width:900px
     }
     
     #dot{
@@ -106,7 +146,7 @@
     #mic-btn:hover{transform:scale(1.05)}
     
     #q-wrap{
-    width:100%;max-width:860px;
+    width:100%;max-width:900px;
     background:#282828;
     border:.5px solid #383838;
     border-radius:8px;
@@ -168,233 +208,267 @@
 
 <body>
 
-<div id="key-wrap">
-  <span id="key-label">Groq API key</span>
-  <input id="key-input" type="password" placeholder="gsk_..." />
-  <button id="key-save" onclick="saveKey()">зберегти</button>
+<div id="sidebar">
+  <div id="sidebar-label">Історія питань</div>
+  <div id="history-list"></div>
 </div>
 
-<div id="top">
-  <div id="dot"></div>
-  <span id="st">введи ключ і збережи</span>
-  <button id="mic-btn" class="on" onclick="toggleMic()">🎤 ON</button>
-</div>
+<div id="main">
+  <div id="key-wrap">
+    <span id="key-label">Groq API key</span>
+    <input id="key-input" type="password" placeholder="gsk_..." />
+    <button id="key-save" onclick="saveKey()">зберегти</button>
+  </div>
 
-<div id="q-wrap">
-  <div id="q-label">питання</div>
-  <div id="q-txt">—</div>
-</div>
+  <div id="top">
+    <div id="dot"></div>
+    <span id="st">введи ключ і збережи</span>
+    <button id="mic-btn" class="on" onclick="toggleMic()">🎤 ON</button>
+  </div>
 
-<div id="a-wrap">
-  <div id="a-ph">чекаю на питання...</div>
-  <div id="a-txt"></div>
-</div>
+  <div id="q-wrap">
+    <div id="q-label">питання</div>
+    <div id="q-txt">—</div>
+  </div>
 
-<button id="detail-btn" onclick="askDetail()">📖 розгорнута відповідь</button>
-<div id="note">made by miraldi</div>
-<div id="err"></div>
+  <div id="a-wrap">
+    <div id="a-ph">чекаю на питання...</div>
+    <div id="a-txt"></div>
+  </div>
 
-<script>
-  let apiKey = localStorage.getItem('groq_key') || ''
-  let rec = null
-  let waiting = false
-  let micEnabled = true
-  let lastQuestion = ""
-  let micStream = null
+  <button id="detail-btn" onclick="askDetail()">📖 розгорнута відповідь</button>
+  <div id="note">made by miraldi</div>
+  <div id="err"></div>
 
-  if (apiKey) {
-    document.getElementById('key-input').value = apiKey
-    requestMicAndStart()
-  }
-
-  function saveKey() {
-    apiKey = document.getElementById('key-input').value.trim()
-    localStorage.setItem('groq_key', apiKey)
-    requestMicAndStart()
-  }
-
-  async function requestMicAndStart() {
-    if (!apiKey) return
-
-    if (micStream) {
-      startListening()
-      return
+  <script>
+    let apiKey = localStorage.getItem('groq_key') || ''
+    let rec = null
+    let waiting = false
+    let micEnabled = true
+    let lastQuestion = ""
+    let micStream = null
+  
+    if (apiKey) {
+      document.getElementById('key-input').value = apiKey
+      requestMicAndStart()
     }
-
-    try {
-      micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      // закриваємо стрім — він потрібен лише щоб отримати дозвіл
-      // на Android він конфліктує з Web Speech API якщо залишити відкритим
-      micStream.getTracks().forEach(t => t.stop())
-      startListening()
-    } catch (e) {
-      setStatus('', 'немає доступу до мікрофона')
-      showErr('дозволь доступ до мікрофона в браузері')
+  
+    function saveKey() {
+      apiKey = document.getElementById('key-input').value.trim()
+      localStorage.setItem('groq_key', apiKey)
+      requestMicAndStart()
     }
-  }
-
-  function setStatus(cls, txt) {
-    document.getElementById('dot').className = cls
-    document.getElementById('st').textContent = txt
-  }
-
-  function showErr(msg) {
-    const el = document.getElementById('err')
-    el.textContent = msg
-    setTimeout(() => el.textContent = '', 4000)
-  }
-
-  function showAnswer(txt) {
-    document.getElementById('a-ph').style.display = 'none'
-    const el = document.getElementById('a-txt')
-    el.style.display = 'block'
-    el.innerHTML = txt.replace(/\[\[(.+?)\]\]/g, (_, word) => {
-      const url = 'https://uk.wikipedia.org/w/index.php?search=' + encodeURIComponent(word)
-      return '<span class="kw" data-url="' + url + '">' + word + '</span>'
-    })
-    // вішаємо кліки через делегування — без inline onclick
-    el.querySelectorAll('.kw').forEach(span => {
-      span.addEventListener('click', () => window.open(span.dataset.url, '_blank'))
-    })
-    document.getElementById('detail-btn').style.display = 'block'
-  }
-
-  async function askDetail() {
-    if (!lastQuestion) return
-    waiting = true
-    setStatus('thinking', 'думаю...')
-    document.getElementById('detail-btn').style.display = 'none'
-    try {
-      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          max_tokens: 800,
-          messages: [
-            { role: 'system', content: "Ти експерт з фармацевтичної хімії. Дай розгорнуту відповідь українською — 5-7 речень. Без зайвих вступів, одразу суть. Ключові терміни (назви речовин, процесів, понять) обгортай у [[подвійні дужки]], наприклад: [[парацетамол]], [[ЦОГ-2]]." },
-            { role: 'user', content: lastQuestion }
-          ]
-        })
-      })
-      const data = await r.json()
-      showAnswer(data.choices?.[0]?.message?.content || '...')
-    } catch(e) { showErr('помилка підключення') }
-    waiting = false
-    if (micEnabled) setStatus('listening', 'слухаю...')
-    else setStatus('', 'мікрофон вимкнений')
-  }
-
-  async function askGroq(question) {
-    waiting = true
-    setStatus('thinking', 'думаю...')
-
-    try {
-      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + apiKey
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          max_tokens: 300,
-          messages: [
-            {
-              role: 'system',
-              content: "Ти експерт з фармацевтичної хімії. Відповідай строго 2-3 речення українською. Без вступних слів. Одразу суть — коротко, точно. Ключові терміни (назви речовин, процесів, понять) обгортай у [[подвійні дужки]], наприклад: [[парацетамол]], [[ЦОГ-2]]."
-            },
-            { role: 'user', content: question }
-          ]
-        })
-      })
-
-      const data = await r.json()
-      const ans = data.choices?.[0]?.message?.content || '...'
-      showAnswer(ans)
-
-    } catch (e) {
-      showErr('помилка підключення')
-    }
-
-    waiting = false
-    if (micEnabled) setStatus('listening', 'слухаю...')
-    else setStatus('', 'мікрофон вимкнений')
-  }
-
-  function toggleMic() {
-    micEnabled = !micEnabled
-    const btn = document.getElementById('mic-btn')
-
-    if (micEnabled) {
-      btn.textContent = '🎤 ON'
-      btn.className = 'on'
-      lastQuestion = ''
-      document.getElementById('q-txt').textContent = '—'
-      startListening()
-    } else {
-      btn.textContent = '🎤 OFF'
-      btn.className = 'off'
-      setStatus('', 'обробляю...')
-      if (rec) { rec.onend = null; try { rec.abort() } catch {} rec = null }
-      if (lastQuestion && !waiting) askGroq(lastQuestion)
-    }
-  }
-
-  function startListening() {
-    if (!apiKey) return
-
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SR) { setStatus('', 'потрібен Chrome'); return }
-
-    if (rec) {
-      try { rec.stop() } catch {}
-      rec = null
-    }
-
-    rec = new SR()
-    rec.lang = 'uk-UA'
-    rec.interimResults = false
-    rec.continuous = false   // continuous:true ламається на Android Chrome
-
-    let restarting = false
-
-    function scheduleRestart(delay) {
-      if (restarting || !apiKey || !micEnabled) return
-      restarting = true
-      setTimeout(() => { restarting = false; startListening() }, delay || 400)
-    }
-
-    rec.onstart = () => setStatus('listening', 'слухаю...')
-
-    rec.onresult = e => {
-      if (!micEnabled) return
-      const raw = e.results[e.results.length - 1][0].transcript
-      // залишаємо тільки українські/латинські літери, цифри і пунктуацію
-      const t = raw.replace(/[^Ѐ-ӿa-zA-Z0-9\s.,;:!?()\-'"]/g, '').trim()
-      if (t) {
-        lastQuestion = lastQuestion ? lastQuestion + ' ' + t : t
-        document.getElementById('q-txt').textContent = lastQuestion
-      }
-    }
-
-    rec.onerror = e => {
-      if (e.error === 'not-allowed') {
-        setStatus('', 'доступ заблоковано')
-        showErr('дозволь доступ до мікрофона в налаштуваннях браузера')
+  
+    async function requestMicAndStart() {
+      if (!apiKey) return
+  
+      if (micStream) {
+        startListening()
         return
       }
-      // network/no-speech — тихий рестарт, onend може не спрацювати
-      scheduleRestart(600)
+  
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        // закриваємо стрім — він потрібен лише щоб отримати дозвіл
+        // на Android він конфліктує з Web Speech API якщо залишити відкритим
+        micStream.getTracks().forEach(t => t.stop())
+        startListening()
+      } catch (e) {
+        setStatus('', 'немає доступу до мікрофона')
+        showErr('дозволь доступ до мікрофона в браузері')
+      }
     }
-
-    rec.onend = () => {
-      scheduleRestart(400)
+  
+    function setStatus(cls, txt) {
+      document.getElementById('dot').className = cls
+      document.getElementById('st').textContent = txt
     }
+  
+    function showErr(msg) {
+      const el = document.getElementById('err')
+      el.textContent = msg
+      setTimeout(() => el.textContent = '', 4000)
+    }
+  
+    function showAnswer(txt) {
+      document.getElementById('a-ph').style.display = 'none'
+      const el = document.getElementById('a-txt')
+      el.style.display = 'block'
+      el.innerHTML = txt.replace(/\[\[(.+?)\]\]/g, (_, word) => {
+        const url = 'https://uk.wikipedia.org/w/index.php?search=' + encodeURIComponent(word)
+        return '<span class="kw" data-url="' + url + '">' + word + '</span>'
+      })
+      // вішаємо кліки через делегування — без inline onclick
+      el.querySelectorAll('.kw').forEach(span => {
+        span.addEventListener('click', () => window.open(span.dataset.url, '_blank'))
+      })
+      document.getElementById('detail-btn').style.display = 'block'
+    }
+  
+    async function askDetail() {
+      if (!lastQuestion) return
+      waiting = true
+      setStatus('thinking', 'думаю...')
+      document.getElementById('detail-btn').style.display = 'none'
+      try {
+        const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+          body: JSON.stringify({
+            model: 'llama-3.3-70b-versatile',
+            max_tokens: 800,
+            messages: [
+              { role: 'system', content: "Ти експерт з фармацевтичної хімії. Дай розгорнуту відповідь українською — 5-7 речень. Без зайвих вступів, одразу суть. Ключові терміни (назви речовин, процесів, понять) обгортай у [[подвійні дужки]], наприклад: [[парацетамол]], [[ЦОГ-2]]." },
+              { role: 'user', content: lastQuestion }
+            ]
+          })
+        })
+        const data = await r.json()
+        showAnswer(data.choices?.[0]?.message?.content || '...')
+      } catch(e) { showErr('помилка підключення') }
+      waiting = false
+      if (micEnabled) setStatus('listening', 'слухаю...')
+      else setStatus('', 'мікрофон вимкнений')
+    }
+  
+    async function askGroq(question) {
+      waiting = true
+      setStatus('thinking', 'думаю...')
+  
+      try {
+        const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + apiKey
+          },
+          body: JSON.stringify({
+            model: 'llama-3.3-70b-versatile',
+            max_tokens: 300,
+            messages: [
+              {
+                role: 'system',
+                content: "Ти експерт з фармацевтичної хімії. Відповідай строго 2-3 речення українською. Без вступних слів. Одразу суть — коротко, точно. Ключові терміни (назви речовин, процесів, понять) обгортай у [[подвійні дужки]], наприклад: [[парацетамол]], [[ЦОГ-2]]."
+              },
+              { role: 'user', content: question }
+            ]
+          })
+        })
+  
+        const data = await r.json()
+        const ans = data.choices?.[0]?.message?.content || '...'
+        showAnswer(ans)
+        addToHistory(question, ans)
+  
+      } catch (e) {
+        showErr('помилка підключення')
+      }
+  
+      waiting = false
+      if (micEnabled) setStatus('listening', 'слухаю...')
+      else setStatus('', 'мікрофон вимкнений')
+    }
+  
+    function toggleMic() {
+      micEnabled = !micEnabled
+      const btn = document.getElementById('mic-btn')
+  
+      if (micEnabled) {
+        btn.textContent = '🎤 ON'
+        btn.className = 'on'
+        lastQuestion = ''
+        document.getElementById('q-txt').textContent = '—'
+        startListening()
+      } else {
+        btn.textContent = '🎤 OFF'
+        btn.className = 'off'
+        setStatus('', 'обробляю...')
+        if (rec) { rec.onend = null; try { rec.abort() } catch {} rec = null }
+        if (lastQuestion && !waiting) askGroq(lastQuestion)
+      }
+    }
+  
+    function startListening() {
+      if (!apiKey) return
+  
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+      if (!SR) { setStatus('', 'потрібен Chrome'); return }
+  
+      if (rec) {
+        try { rec.stop() } catch {}
+        rec = null
+      }
+  
+      rec = new SR()
+      rec.lang = 'uk-UA'
+      rec.interimResults = false
+      rec.continuous = false   // continuous:true ламається на Android Chrome
+  
+      let restarting = false
+  
+      function scheduleRestart(delay) {
+        if (restarting || !apiKey || !micEnabled) return
+        restarting = true
+        setTimeout(() => { restarting = false; startListening() }, delay || 400)
+      }
+  
+      rec.onstart = () => setStatus('listening', 'слухаю...')
+  
+      rec.onresult = e => {
+        if (!micEnabled) return
+        const raw = e.results[e.results.length - 1][0].transcript
+        // залишаємо тільки українські/латинські літери, цифри і пунктуацію
+        const t = raw.replace(/[^Ѐ-ӿa-zA-Z0-9\s.,;:!?()\-'"]/g, '').trim()
+        if (t) {
+          lastQuestion = lastQuestion ? lastQuestion + ' ' + t : t
+          document.getElementById('q-txt').textContent = lastQuestion
+        }
+      }
+  
+      rec.onerror = e => {
+        if (e.error === 'not-allowed') {
+          setStatus('', 'доступ заблоковано')
+          showErr('дозволь доступ до мікрофона в налаштуваннях браузера')
+          return
+        }
+        // network/no-speech — тихий рестарт, onend може не спрацювати
+        scheduleRestart(600)
+      }
+  
+      rec.onend = () => {
+        scheduleRestart(400)
+      }
+  
+      rec.start()
+    }
+  
+    let history = []
+  
+    function addToHistory(q, a) {
+      history.unshift({ q, a, time: new Date().toLocaleTimeString('uk', {hour:'2-digit',minute:'2-digit'}) })
+      if (history.length > 20) history.pop()
+      renderHistory()
+    }
+  
+    function renderHistory() {
+      const list = document.getElementById('history-list')
+      list.innerHTML = history.map((item, i) => `
+        <div class="h-item${i===0?' active':''}" onclick="replayQuestion(${i})">
+          <div class="h-q"><span>${item.time}</span>${item.q}</div>
+          <div class="h-a">${item.a.replace(/<[^>]+>/g,'')}</div>
+        </div>
+      `).join('')
+    }
+  
+    function replayQuestion(i) {
+      document.querySelectorAll('.h-item').forEach((el,j) => el.classList.toggle('active', j===i))
+      const item = history[i]
+      document.getElementById('q-txt').textContent = item.q
+      lastQuestion = item.q
+      showAnswer(item.a)
+    }
+  </script>
 
-    rec.start()
-  }
-</script>
-
+</div>
 </body>
 </html>

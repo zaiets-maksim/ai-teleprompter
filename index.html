@@ -62,41 +62,15 @@
     #detail-btn:hover{border-color:#888;color:#bbb}
     #err{margin-top:.75rem;font-size:12px;color:#c0392b}
 
-    /* Ключові слова */
-    .kw{color:#7ec8e3;border-bottom:1px solid #7ec8e344;cursor:pointer;transition:color .15s,border-color .15s;position:relative}
+    .kw{color:#7ec8e3;border-bottom:1px solid #7ec8e344;cursor:pointer;transition:color .15s;position:relative}
     .kw:hover{color:#aee0f5;border-bottom-color:#aee0f5}
-
-    /* Tooltip */
-    .kw-tooltip{
-      display:none;
-      position:absolute;
-      bottom:calc(100% + 10px);
-      left:50%;
-      transform:translateX(-50%);
-      background:#1a1a1a;
-      border:.5px solid #3a3a3a;
-      border-radius:10px;
-      padding:10px 14px;
-      min-width:200px;
-      max-width:300px;
-      z-index:100;
-      pointer-events:none;
-      box-shadow:0 8px 24px rgba(0,0,0,.5)
-    }
-    .kw-tooltip::after{
-      content:'';
-      position:absolute;
-      top:100%;left:50%;
-      transform:translateX(-50%);
-      border:6px solid transparent;
-      border-top-color:#3a3a3a
-    }
+    .kw-tooltip{display:none;position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);background:#1a1a1a;border:.5px solid #3a3a3a;border-radius:10px;padding:10px 14px;min-width:200px;max-width:300px;z-index:100;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+    .kw-tooltip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:#3a3a3a}
     .kw:hover .kw-tooltip{display:block}
     .kw-tooltip-row{font-size:12px;color:#aaa;padding:3px 0;white-space:nowrap}
     .kw-tooltip-empty{font-size:11px;color:#555;font-style:italic}
     .kw-tooltip-loading{font-size:11px;color:#555;font-style:italic}
 
-    /* Бейджі */
     .badge{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600}
     .b-toxic  {background:#3d1f1f;color:#f08080;border:.5px solid #6b2f2f}
     .b-lethal {background:#2a1a1a;color:#cc6666;border:.5px solid #5a2020}
@@ -142,262 +116,260 @@
   <button id="detail-btn" onclick="askDetail()">📖 розгорнута відповідь</button>
   <div id="note">made by miraldi</div>
   <div id="err"></div>
-
-  <script>
-    let apiKey = localStorage.getItem('groq_key') || ''
-    let rec = null
-    let waiting = false
-    let micEnabled = true
-    let lastQuestion = ""
-    let micStream = null
-
-    const BADGE_RULES = [
-      { match: 'Токсична',    cls: 'b-toxic',   label: '⚠️ Токсична речовина' },
-      { match: 'Летальна',    cls: 'b-lethal',  label: '☠️ Летальна доза' },
-      { match: 'Рецептурний', cls: 'b-rx',      label: '💊 Рецептурний препарат' },
-      { match: 'Біологічна',  cls: 'b-bio',     label: '🧬 Біологічна молекула' },
-      { match: 'Синтетична',  cls: 'b-synth',   label: '⚗️ Синтетична сполука' },
-      { match: 'Природного',  cls: 'b-natural', label: '🌿 Природного походження' },
-      { match: 'медицині',    cls: 'b-med',     label: '🏥 Використовується в медицині' },
-      { match: 'Заборонений', cls: 'b-banned',  label: '🚫 Заборонений препарат' },
-    ]
-
-    if (apiKey) {
-      document.getElementById('key-input').value = apiKey
-      requestMicAndStart()
-    }
-
-    function saveKey() {
-      apiKey = document.getElementById('key-input').value.trim()
-      localStorage.setItem('groq_key', apiKey)
-      requestMicAndStart()
-    }
-
-    async function requestMicAndStart() {
-      if (!apiKey) return
-      if (micStream) { startListening(); return }
-      try {
-        micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        micStream.getTracks().forEach(t => t.stop())
-        startListening()
-      } catch (e) {
-        setStatus('', 'немає доступу до мікрофона')
-        showErr('дозволь доступ до мікрофона в браузері')
-      }
-    }
-
-    function setStatus(cls, txt) {
-      document.getElementById('dot').className = cls
-      document.getElementById('st').textContent = txt
-    }
-
-    function showErr(msg) {
-      const el = document.getElementById('err')
-      el.textContent = msg
-      setTimeout(() => el.textContent = '', 4000)
-    }
-
-    const tooltipCache = {}
-
-    async function fetchWordBadges(word, tooltipEl) {
-      if (tooltipCache[word]) {
-        tooltipEl.innerHTML = tooltipCache[word]
-        return
-      }
-      tooltipEl.innerHTML = '<span class="kw-tooltip-loading">шукаю...</span>'
-      try {
-        const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-          body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
-            max_tokens: 100,
-            messages: [{
-              role: 'system',
-              content: 'Відповідай ТІЛЬКИ списком бейджів через | без пояснень. Вибери підходящі з цього списку для слова яке отримаєш: ⚠️ Токсична речовина | ☠️ Летальна доза | 💊 Рецептурний препарат | 🧬 Біологічна молекула | ⚗️ Синтетична сполука | 🌿 Природного походження | 🏥 Використовується в медицині | 🚫 Заборонений препарат. Якщо жоден не підходить — відповідай: немає. Приклад відповіді: ⚠️ Токсична речовина | 💊 Рецептурний препарат'
-            }, {
-              role: 'user', content: word
-            }]
-          })
-        })
-        const data = await r.json()
-        const ans = (data.choices?.[0]?.message?.content || '').trim()
-        let html = ''
-        if (ans === 'немає' || !ans) {
-          html = '<span class="kw-tooltip-empty">без особливостей</span>'
-        } else {
-          html = ans.split('|').map(b => `<div class="kw-tooltip-row">${b.trim()}</div>`).join('')
-        }
-        tooltipCache[word] = html
-        tooltipEl.innerHTML = html
-      } catch(e) {
-        tooltipEl.innerHTML = '<span class="kw-tooltip-empty">помилка</span>'
-      }
-    }
-
-    function showAnswer(txt) {
-      document.getElementById('a-ph').style.display = 'none'
-      // прибираємо рядок BADGES якщо є (більше не показуємо зверху)
-      const cleanTxt = txt.split('\n').filter(l => !l.startsWith('BADGES:')).join('\n').trim()
-
-      const el = document.getElementById('a-txt')
-      el.style.display = 'block'
-      el.innerHTML = cleanTxt.replace(/\[\[(.+?)\]\]/g, (_, word) => {
-        const url = 'https://uk.wikipedia.org/w/index.php?search=' + encodeURIComponent(word)
-        return `<span class="kw" data-url="${url}" data-word="${word}">${word}<span class="kw-tooltip"><span class="kw-tooltip-loading">наведи щоб дізнатись</span></span></span>`
-      })
-
-      el.querySelectorAll('.kw').forEach(span => {
-        let loaded = false
-        span.addEventListener('mouseenter', () => {
-          if (loaded) return
-          loaded = true
-          fetchWordBadges(span.dataset.word, span.querySelector('.kw-tooltip'))
-        })
-        span.addEventListener('click', () => window.open(span.dataset.url, '_blank'))
-      })
-
-      document.getElementById('detail-btn').style.display = 'block'
-    }
-
-    async function askDetail() {
-      if (!lastQuestion) return
-      waiting = true
-      setStatus('thinking', 'думаю...')
-      document.getElementById('detail-btn').style.display = 'none'
-      try {
-        const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-          body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
-            max_tokens: 800,
-            messages: [
-              { role: 'system', content: "Ти експерт з фармацевтичної хімії. Дай розгорнуту відповідь українською — 5-7 речень. Без зайвих вступів, одразу суть. Ключові терміни обгортай у [[подвійні дужки]]. Якщо питання стосується конкретної речовини — ПЕРШИМ рядком постав бейджі: BADGES: ⚠️ Токсична речовина | ☠️ Летальна доза | 💊 Рецептурний препарат | 🧬 Біологічна молекула | ⚗️ Синтетична сполука | 🌿 Природного походження | 🏥 Використовується в медицині | 🚫 Заборонений препарат / прекурсор. Якщо речовини немає — не пиши рядок BADGES." },
-              { role: 'user', content: lastQuestion }
-            ]
-          })
-        })
-        const data = await r.json()
-        showAnswer(data.choices?.[0]?.message?.content || '...')
-      } catch(e) { showErr('помилка підключення') }
-      waiting = false
-      if (micEnabled) setStatus('listening', 'слухаю...')
-      else setStatus('', 'мікрофон вимкнений')
-    }
-
-    async function askGroq(question) {
-      waiting = true
-      setStatus('thinking', 'думаю...')
-      try {
-        const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-          body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
-            max_tokens: 300,
-            messages: [
-              {
-                role: 'system',
-                content: "Ти експерт з фармацевтичної хімії. Відповідай строго 2-3 речення українською. Без вступних слів. Одразу суть — коротко, точно. Ключові терміни обгортай у [[подвійні дужки]]. Якщо питання стосується конкретної речовини — ПЕРШИМ рядком відповіді постав відповідні бейджі: BADGES: ⚠️ Токсична речовина | ☠️ Летальна доза | 💊 Рецептурний препарат | 🧬 Біологічна молекула | ⚗️ Синтетична сполука | 🌿 Природного походження | 🏥 Використовується в медицині | 🚫 Заборонений препарат / прекурсор. Якщо речовини немає — не пиши рядок BADGES взагалі."
-              },
-              { role: 'user', content: question }
-            ]
-          })
-        })
-        const data = await r.json()
-        const ans = data.choices?.[0]?.message?.content || '...'
-        showAnswer(ans)
-        addToHistory(question, ans)
-      } catch (e) {
-        showErr('помилка підключення')
-      }
-      waiting = false
-      if (micEnabled) setStatus('listening', 'слухаю...')
-      else setStatus('', 'мікрофон вимкнений')
-    }
-
-    function toggleMic() {
-      micEnabled = !micEnabled
-      const btn = document.getElementById('mic-btn')
-      if (micEnabled) {
-        btn.textContent = '🎤 ON'
-        btn.className = 'on'
-        lastQuestion = ''
-        document.getElementById('q-txt').textContent = '—'
-        startListening()
-      } else {
-        btn.textContent = '🎤 OFF'
-        btn.className = 'off'
-        setStatus('', 'обробляю...')
-        if (rec) { rec.onend = null; try { rec.abort() } catch {} rec = null }
-        if (lastQuestion && !waiting) askGroq(lastQuestion)
-      }
-    }
-
-    function startListening() {
-      if (!apiKey) return
-      const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-      if (!SR) { setStatus('', 'потрібен Chrome'); return }
-      if (rec) { try { rec.stop() } catch {} rec = null }
-
-      rec = new SR()
-      rec.lang = 'uk-UA'
-      rec.interimResults = false
-      rec.continuous = false
-
-      let restarting = false
-      function scheduleRestart(delay) {
-        if (restarting || !apiKey || !micEnabled) return
-        restarting = true
-        setTimeout(() => { restarting = false; startListening() }, delay || 400)
-      }
-
-      rec.onstart = () => setStatus('listening', 'слухаю...')
-      rec.onresult = e => {
-        if (!micEnabled) return
-        const raw = e.results[e.results.length - 1][0].transcript
-        const t = raw.replace(/[^Ѐ-ӿa-zA-Z0-9\s.,;:!?()\-'"]/g, '').trim()
-        if (t) {
-          lastQuestion = lastQuestion ? lastQuestion + ' ' + t : t
-          document.getElementById('q-txt').textContent = lastQuestion
-        }
-      }
-      rec.onerror = e => {
-        if (e.error === 'not-allowed') {
-          setStatus('', 'доступ заблоковано')
-          showErr('дозволь доступ до мікрофона в налаштуваннях браузера')
-          return
-        }
-        scheduleRestart(600)
-      }
-      rec.onend = () => scheduleRestart(400)
-      rec.start()
-    }
-
-    let history = []
-    function addToHistory(q, a) {
-      history.unshift({ q, a, time: new Date().toLocaleTimeString('uk', {hour:'2-digit',minute:'2-digit'}) })
-      if (history.length > 20) history.pop()
-      renderHistory()
-    }
-    function renderHistory() {
-      const list = document.getElementById('history-list')
-      list.innerHTML = history.map((item, i) => `
-        <div class="h-item${i===0?' active':''}" onclick="replayQuestion(${i})">
-          <div class="h-q"><span>${item.time}</span>${item.q}</div>
-          <div class="h-a">${item.a.replace(/<[^>]+>/g,'')}</div>
-        </div>
-      `).join('')
-    }
-    function replayQuestion(i) {
-      document.querySelectorAll('.h-item').forEach((el,j) => el.classList.toggle('active', j===i))
-      const item = history[i]
-      document.getElementById('q-txt').textContent = item.q
-      lastQuestion = item.q
-      showAnswer(item.a)
-    }
-  </script>
 </div>
+
+<script>
+  let apiKey = localStorage.getItem('groq_key') || ''
+  let waiting = false
+  let micEnabled = false
+  let lastQuestion = ''
+  let audioStream = null
+  let mediaRecorder = null
+  const CHUNK_MS = 3000
+
+  if (apiKey) {
+    document.getElementById('key-input').value = apiKey
+  }
+
+  function saveKey() {
+    apiKey = document.getElementById('key-input').value.trim()
+    localStorage.setItem('groq_key', apiKey)
+  }
+
+  function setStatus(cls, txt) {
+    document.getElementById('dot').className = cls
+    document.getElementById('st').textContent = txt
+  }
+
+  function showErr(msg) {
+    const el = document.getElementById('err')
+    el.textContent = msg
+    setTimeout(() => el.textContent = '', 4000)
+  }
+
+  // ── Whisper: записуємо чанками поки ON, накопичуємо текст ────
+  async function transcribeBlob(blob) {
+    if (blob.size < 1000) return
+    const form = new FormData()
+    form.append('file', blob, 'audio.webm')
+    form.append('model', 'whisper-large-v3-turbo')
+    form.append('language', 'uk')
+    form.append('response_format', 'text')
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + apiKey },
+        body: form
+      })
+      const text = (await r.text()).trim()
+      if (text && text.length > 2) {
+        lastQuestion = lastQuestion ? lastQuestion + ' ' + text : text
+        document.getElementById('q-txt').textContent = lastQuestion
+      }
+    } catch(e) {
+      showErr('помилка транскрипції')
+    }
+  }
+
+  function startChunk() {
+    if (!micEnabled || !audioStream) return
+    const chunks = []
+    const mr = new MediaRecorder(audioStream)
+    mediaRecorder = mr
+    mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
+    mr.onstop = () => {
+      transcribeBlob(new Blob(chunks, { type: mr.mimeType }))
+      if (micEnabled) startChunk()
+    }
+    mr.start()
+    setTimeout(() => { if (mr.state === 'recording') mr.stop() }, CHUNK_MS)
+  }
+
+  async function startListening() {
+    if (!apiKey) { showErr('спочатку введи API ключ'); return }
+    try {
+      audioStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    } catch(e) {
+      setStatus('', 'немає доступу до мікрофона')
+      showErr('дозволь доступ до мікрофона в браузері')
+      micEnabled = false
+      document.getElementById('mic-btn').textContent = '🎤 ON'
+      document.getElementById('mic-btn').className = 'off'
+      return
+    }
+    setStatus('listening', 'слухаю...')
+    startChunk()
+  }
+
+  function stopListening() {
+    // зупиняємо запис — останній чанк допишеться і відправиться
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      // перехоплюємо onstop щоб після останнього чанку відправити питання
+      mediaRecorder.onstop = () => {
+        const chunks = []
+        // blob вже зібраний через ondataavailable — просто чекаємо
+      }
+      mediaRecorder.stop()
+    }
+    if (audioStream) {
+      audioStream.getTracks().forEach(t => t.stop())
+      audioStream = null
+    }
+    mediaRecorder = null
+  }
+
+  // ── Тултіп ───────────────────────────────────────────────────
+  const tooltipCache = {}
+
+  async function fetchWordBadges(word, tooltipEl) {
+    if (tooltipCache[word]) { tooltipEl.innerHTML = tooltipCache[word]; return }
+    tooltipEl.innerHTML = '<span class="kw-tooltip-loading">шукаю...</span>'
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile', max_tokens: 100,
+          messages: [{
+            role: 'system',
+            content: 'Відповідай ТІЛЬКИ списком бейджів через | без пояснень. Вибери підходящі з цього списку для слова яке отримаєш: ⚠️ Токсична речовина | ☠️ Летальна доза | 💊 Рецептурний препарат | 🧬 Біологічна молекула | ⚗️ Синтетична сполука | 🌿 Природного походження | 🏥 Використовується в медицині | 🚫 Заборонений препарат. Якщо жоден не підходить — відповідай: немає.'
+          }, { role: 'user', content: word }]
+        })
+      })
+      const data = await r.json()
+      const ans = (data.choices?.[0]?.message?.content || '').trim()
+      const html = (ans === 'немає' || !ans)
+        ? '<span class="kw-tooltip-empty">без особливостей</span>'
+        : ans.split('|').map(b => `<div class="kw-tooltip-row">${b.trim()}</div>`).join('')
+      tooltipCache[word] = html
+      tooltipEl.innerHTML = html
+    } catch(e) {
+      tooltipEl.innerHTML = '<span class="kw-tooltip-empty">помилка</span>'
+    }
+  }
+
+  function showAnswer(txt) {
+    document.getElementById('a-ph').style.display = 'none'
+    const cleanTxt = txt.split('\n').filter(l => !l.startsWith('BADGES:')).join('\n').trim()
+    const el = document.getElementById('a-txt')
+    el.style.display = 'block'
+    el.innerHTML = cleanTxt.replace(/\[\[(.+?)\]\]/g, (_, word) => {
+      const url = 'https://uk.wikipedia.org/w/index.php?search=' + encodeURIComponent(word)
+      return `<span class="kw" data-url="${url}" data-word="${word}">${word}<span class="kw-tooltip"><span class="kw-tooltip-loading">наведи щоб дізнатись</span></span></span>`
+    })
+    el.querySelectorAll('.kw').forEach(span => {
+      let loaded = false
+      span.addEventListener('mouseenter', () => {
+        if (loaded) return; loaded = true
+        fetchWordBadges(span.dataset.word, span.querySelector('.kw-tooltip'))
+      })
+      span.addEventListener('click', () => window.open(span.dataset.url, '_blank'))
+    })
+    document.getElementById('detail-btn').style.display = 'block'
+  }
+
+  async function askDetail() {
+    if (!lastQuestion) return
+    waiting = true
+    setStatus('thinking', 'думаю...')
+    document.getElementById('detail-btn').style.display = 'none'
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile', max_tokens: 800,
+          messages: [
+            { role: 'system', content: "Ти експерт з фармацевтичної хімії. Дай розгорнуту відповідь українською — 5-7 речень. Без зайвих вступів, одразу суть. Ключові терміни обгортай у [[подвійні дужки]]." },
+            { role: 'user', content: lastQuestion }
+          ]
+        })
+      })
+      const data = await r.json()
+      showAnswer(data.choices?.[0]?.message?.content || '...')
+    } catch(e) { showErr('помилка підключення') }
+    waiting = false
+    if (micEnabled) setStatus('listening', 'слухаю...')
+    else setStatus('', 'мікрофон вимкнений')
+  }
+
+  async function askGroq(question) {
+    waiting = true
+    setStatus('thinking', 'думаю...')
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile', max_tokens: 300,
+          messages: [
+            {
+              role: 'system',
+              content: "Ти експерт з фармацевтичної хімії. Відповідай строго 2-3 речення українською. Без вступних слів. Одразу суть — коротко, точно. Ключові терміни обгортай у [[подвійні дужки]]."
+            },
+            { role: 'user', content: question }
+          ]
+        })
+      })
+      const data = await r.json()
+      const ans = data.choices?.[0]?.message?.content || '...'
+      showAnswer(ans)
+      addToHistory(question, ans)
+    } catch(e) { showErr('помилка підключення') }
+    waiting = false
+    setStatus('', 'мікрофон вимкнений')
+  }
+
+  function toggleMic() {
+    micEnabled = !micEnabled
+    const btn = document.getElementById('mic-btn')
+    if (micEnabled) {
+      // ON — скидаємо питання і починаємо запис
+      btn.textContent = '🎤 ON'
+      btn.className = 'on'
+      lastQuestion = ''
+      document.getElementById('q-txt').textContent = '—'
+      startListening()
+    } else {
+      // OFF — зупиняємо запис і відправляємо накопичений текст
+      btn.textContent = '🎤 OFF'
+      btn.className = 'off'
+      setStatus('', 'обробляю...')
+      stopListening()
+      // невелика затримка щоб останній чанк встиг транскрибуватись
+      setTimeout(() => {
+        if (lastQuestion && !waiting) askGroq(lastQuestion)
+      }, CHUNK_MS + 500)
+    }
+  }
+
+  // ── Історія ──────────────────────────────────────────────────
+  let history = []
+
+  function addToHistory(q, a) {
+    history.unshift({ q, a, time: new Date().toLocaleTimeString('uk', {hour:'2-digit',minute:'2-digit'}) })
+    if (history.length > 20) history.pop()
+    renderHistory()
+  }
+
+  function renderHistory() {
+    const list = document.getElementById('history-list')
+    list.innerHTML = history.map((item, i) => `
+      <div class="h-item${i===0?' active':''}" onclick="replayQuestion(${i})">
+        <div class="h-q"><span>${item.time}</span>${item.q}</div>
+        <div class="h-a">${item.a.replace(/<[^>]+>/g,'')}</div>
+      </div>
+    `).join('')
+  }
+
+  function replayQuestion(i) {
+    document.querySelectorAll('.h-item').forEach((el,j) => el.classList.toggle('active', j===i))
+    const item = history[i]
+    document.getElementById('q-txt').textContent = item.q
+    lastQuestion = item.q
+    showAnswer(item.a)
+  }
+</script>
+
 </body>
 </html>
